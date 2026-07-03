@@ -27,18 +27,18 @@ To get this workspace running, you need three main components in your Cloudflare
 ### 2. Create the Storage (Where files live)
 *   **R2 (For large files):**
     *   On the left sidebar, click **R2**.
-    *   Click **Create bucket** and name it something like `pdf-bucket`.
+    *   Click **Create bucket** and name it something like `pdf-r2`.
     *   *Note:* Cloudflare requires a credit card on file to enable R2, but you get **10GB of storage for free** every month, which is plenty for thousands of PDFs.
 *   **KV (For settings & light data):**
     *   On the left sidebar, click **Workers & Pages** > **KV**.
-    *   Click **Create namespace** and name it `pdf-storage`.
+    *   Click **Create namespace** and name it `pdf-kv`.
 
 ### 3. Connect Storage to your Worker (Bindings)
 This tells your Worker where to save your data:
 *   Go back to **Workers & Pages** and click on your `pdf-workspace` worker.
 *   Go to **Settings** > **Variables & Secrets** > **Bindings**.
-*   **To add R2:** Click **Add** > **R2 Bucket**. Set the Variable name to exactly: `pdf_r2_library` and select the bucket you created.
-*   **To add KV:** Click **Add** > **KV Namespace**. Set the Variable name to exactly: `pdf_kv_store` and select your namespace.
+*   **To add R2:** Click **Add** > **R2 Bucket**. Set the Variable name to EXACTLY: `pdf_r2_library` and select the bucket you created.
+*   **To add KV:** Click **Add** > **KV Namespace**. Set the Variable name to EXACTLY: `pdf_kv_store` and select your namespace.
 *   *You must bind at least one of these for the app to function.*
 
 ## Authentication (Optional)
