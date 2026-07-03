@@ -32,8 +32,9 @@ The **Online PDF Workspace** is a sleek, serverless Progressive Web App (PWA) de
 
 3.  **Configure Storage Bindings:**
     To ensure your workspace can save files and annotations, you **must** bind storage to your Worker. Go to **Settings** > **Variables & Secrets** > **Bindings**:
-    *   **For R2 Storage (Recommended for high volume):**
+    *   **For R2 Storage (Recommended):**
         *   Create an R2 Bucket in your Cloudflare dashboard.
+        *   *Note:* Cloudflare requires a credit card on file to enable R2, but it is extremely cost-effective and includes a **generous 10GB of monthly storage for free**.
         *   Add an **R2 Bucket binding**. Set the variable name to exactly: `pdf_r2_library`
     *   **For KV Storage (Fast key-value access):**
         *   Create a KV Namespace.
@@ -53,6 +54,22 @@ The **Online PDF Workspace** is a sleek, serverless Progressive Web App (PWA) de
 *   **Rendering:** [PDF.js](https://mozilla.github.io/pdf.js/) for high-fidelity document display.
 *   **Manipulation:** [PDF-lib](https://pdf-lib.js.org/) for powerful, on-the-fly PDF modifications.
 
+## Acknowledgements
+
+*   This project was developed with the assistance of [Gemini](https://gemini.google.com/), an AI collaborator by Google, which helped with code structure, logic, and debugging.
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tr>
+    <td align="center"><a href="https://gemini.google.com/"><img src="https://avatars.githubusercontent.com/u/1342004?v=4" width="100px;" alt="Gemini"/><br /><sub><b>Gemini (AI)</b></sub></a><br /><a href="#" title="Code">💻</a></td>
+  </tr>
+</table>
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License.   
