@@ -32,12 +32,14 @@ A serverless Progressive Web App (PWA) for viewing, annotating, and managing PDF
 
 3. **Configure Storage Bindings:**
    * Go to your Worker's **Settings** > **Variables & Secrets** > **Bindings**.
-   * **Option 1: R2 Storage (Recommended)**
+   * **Option 1: R2 Bucket**
      * Add an R2 Bucket binding.
      * Set the Variable name to exactly: `pdf_r2_library`
    * **Option 2: KV Storage**
      * Add a KV Namespace binding.
      * Set the Variable name to exactly: `pdf_kv_store`
+   * **Option 3: R2 Bucket + KV Storage (Recommended)**
+     * Option 1 + Option 2.
 
 4. **Set Up Authentication (Optional but Recommended):**
    * Under **Settings** > **Variables & Secrets**, add the following environment variables (Plain text or Secret):
