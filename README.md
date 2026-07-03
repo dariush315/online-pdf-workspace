@@ -21,7 +21,7 @@ The **Online PDF Workspace** is a sleek, serverless Progressive Web App (PWA) de
 
 1.  **Create a Cloudflare Worker:**
     *   Go to your Cloudflare Dashboard > **Workers & Pages** > **Create Application** > **Create Worker**.
-    *   Name it `pdf-workspace` and deploy it.
+    *   Name it `pdf-workspace` or anything you want and deploy it.
 
 2.  **Add the Code:**
     *   Click **Edit code** in your Worker's dashboard.
