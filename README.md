@@ -17,7 +17,7 @@ A serverless Progressive Web App (PWA) for viewing, annotating, and managing PDF
 
 * A [Cloudflare](https://dash.cloudflare.com/) account.
 * A Cloudflare Worker.
-* An R2 Bucket (recommended) or a KV Namespace for storage.
+* An R2 Bucket (recommended) and/or a KV Namespace for storage.
 
 ## Installation & Deployment
 
