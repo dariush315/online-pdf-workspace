@@ -1,7 +1,7 @@
 # Online PDF Workspace
 
 The **Online PDF Workspace** is a powerful, serverless Progressive Web App (PWA) that functions as a fully integrated **PDF Reader and Editor** directly in your browser. Whether you need to quickly review, organize, or make precise edits to your documents, this tool provides a fast, intuitive, and secure environment to manage your files without leaving the edge. It’s built to be lightweight, high-performance, and completely personal.
-<img width="1919" height="981" alt="image" src="https://github.com/user-attachments/assets/363bb13a-24b4-4475-b13b-892dcced4a67" />
+<img width="1909" height="986" alt="image" src="https://github.com/user-attachments/assets/bf6b72aa-9435-4926-b279-dd5b7e16d5b1" />
 ## Core Capabilities
 
 *   **PDF Reader:** View documents with high-fidelity rendering, multi-tab navigation, and responsive controls.
