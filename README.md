@@ -1,58 +1,66 @@
-# Cloud PDF Workspace
+# Online PDF Workspace
 
-A serverless Progressive Web App (PWA) for viewing, annotating, and managing PDFs. Built to run entirely on Cloudflare Workers using PDF.js and PDF-lib, with automatic cloud syncing via Cloudflare R2 or KV storage.
+The **Online PDF Workspace** is a sleek, serverless Progressive Web App (PWA) designed for seamless PDF management directly in your browser. Whether you need to review documents on the go or perform precise annotations, this tool provides a fast, intuitive, and secure environment to view, annotate, and organize your files without leaving the edge. It’s built to be lightweight, performant, and completely personal.
 
 ## Features
 
-* **Serverless Architecture:** Runs entirely on the edge using a single Cloudflare Worker script.
+* **Serverless Architecture:** Deployed entirely on the Cloudflare edge for lightning-fast performance.
 * **Rich Annotations:** Highlight, comment, draw, add text, insert shapes, and embed images directly onto PDFs.
-* **PDF Manipulation:** Merge multiple PDFs, delete specific pages, rotate pages, and export selections.
-* **Cloud Sync & Storage:** Automatically saves document state and annotations to Cloudflare R2 (recommended) or KV storage.
-* **Undo/Redo System:** Full version history with cross-session undo/redo support.
-* **PWA Ready:** Installable as a native app on desktop and mobile devices.
-* **Multi-Tab Interface:** Open and switch between multiple PDFs seamlessly.
-* **Responsive UI:** Dark/Light modes, custom zoom controls, and touch-optimized tools for mobile users.
+* **PDF Manipulation:** Merge files, delete pages, rotate layouts, and export specific selections.
+* **Intelligent Cloud Sync:** Automatically saves your document state, history, and annotations to Cloudflare R2 or KV storage.
+* **Undo/Redo System:** Full version history support, allowing you to track changes and revert to previous states across sessions.
+* **PWA Optimized:** Installable as a native-feeling app on both desktop and mobile devices.
+* **Multi-Tab Interface:** Open and toggle between multiple PDFs in a single workspace.
+* **Responsive UI:** Designed with a clean look featuring Dark/Light modes, precise zoom controls, and touch-friendly tools.
 
 ## Prerequisites
 
 * A [Cloudflare](https://dash.cloudflare.com/) account.
 * A Cloudflare Worker.
-* An R2 Bucket (recommended) and/or a KV Namespace for storage.
+* An R2 Bucket and/or a KV Namespace (you must bind at least one for storage).
 
 ## Installation & Deployment
 
 1. **Create a Cloudflare Worker:**
-   * Go to Cloudflare Dashboard > Workers & Pages > Create Application > Create Worker.
-   * Name it `pdf-workspace` and deploy.
+* Go to your Cloudflare Dashboard > **Workers & Pages** > **Create Application** > **Create Worker**.
+* Name it `pdf-workspace` and deploy it.
+
 
 2. **Add the Code:**
-   * Click **Edit code**.
-   * Copy the entire `worker.js` script from this repository and paste it into the editor.
-   * Save and deploy.
+* Click **Edit code** in your Worker's dashboard.
+* Copy the `worker.js` script from this repository and paste it into the editor.
+* Save and deploy.
+
 
 3. **Configure Storage Bindings:**
-   * Go to your Worker's **Settings** > **Variables & Secrets** > **Bindings**.
-   * **Option 1: R2 Bucket**
-     * Add an R2 Bucket binding.
-     * Set the Variable name to exactly: `pdf_r2_library`
-   * **Option 2: KV Storage**
-     * Add a KV Namespace binding.
-     * Set the Variable name to exactly: `pdf_kv_store`
-   * **Option 3: R2 Bucket + KV Storage (Recommended)**
-     * Option 1 + Option 2.
+To ensure your workspace can save files and annotations, you **must** bind storage to your Worker. Go to **Settings** > **Variables & Secrets** > **Bindings**:
+* **For R2 Storage (Recommended for high volume):**
+* Create an R2 Bucket in your Cloudflare dashboard.
+* Add an **R2 Bucket binding**. Set the variable name to exactly: `pdf_r2_library`
 
-4. **Set Up Authentication (Optional but Recommended):**
-   * Under **Settings** > **Variables & Secrets**, add the following environment variables (Plain text or Secret):
-     * `AUTH_USER`: Your desired login username.
-     * `AUTH_PASS`: Your desired login password.
-   * If these are left blank, the workspace will be public.
+
+* **For KV Storage (Fast key-value access):**
+* Create a KV Namespace.
+* Add a **KV Namespace binding**. Set the variable name to exactly: `pdf_kv_store`
+
+
+* **Pro Tip:** Bind *both* if you want maximum flexibility and performance. The system automatically detects and uses your bindings.
+
+
+4. **Set Up Authentication (Optional):**
+Keep your workspace secure by adding basic authentication. Under **Settings** > **Variables & Secrets**, add:
+* `AUTH_USER`: Your desired username.
+* `AUTH_PASS`: Your desired password.
+* *Note: If these variables are left blank, your workspace will be accessible to anyone with the URL.*
+
+
 
 ## Tech Stack
 
-* **Frontend:** Vanilla JavaScript, HTML5, CSS3
-* **Backend:** Cloudflare Workers
-* **PDF Rendering:** [PDF.js](https://mozilla.github.io/pdf.js/)
-* **PDF Manipulation:** [PDF-lib](https://pdf-lib.js.org/)
+* **Frontend:** Pure Vanilla JavaScript, HTML5, and CSS3.
+* **Backend:** Serverless logic via Cloudflare Workers.
+* **Rendering:** [PDF.js](https://mozilla.github.io/pdf.js/) for high-fidelity document display.
+* **Manipulation:** [PDF-lib](https://pdf-lib.js.org/) for powerful, on-the-fly PDF modifications.
 
 ## License
 
