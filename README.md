@@ -14,7 +14,7 @@ The **Online PDF Workspace** is a powerful, serverless Progressive Web App (PWA)
 *   **Serverless Architecture:** Deployed entirely on the Cloudflare edge for lightning-fast speeds.
 *   **Intelligent Cloud Sync:** Automatically saves your document state, history, and edits to Cloudflare R2 or KV storage.
 *   **Version Control:** Full history support allows you to track changes and revert to previous versions of your edited documents.
-*   **PWA Optimized:** Install it as a native-feeling app on your desktop or mobile device.
+*   **PWA/desktop/mobile Optimized:** Install it as a native-feeling app on your desktop or mobile device.
 
 ## Setting Up Cloudflare (Step-by-Step for Amateurs)
 
