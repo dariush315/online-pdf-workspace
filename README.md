@@ -16,8 +16,6 @@ The **Online PDF Workspace** is a sleek, serverless Progressive Web App (PWA) de
 ## Prerequisites
 
 *   A [Cloudflare](https://dash.cloudflare.com/) account.
-*   A Cloudflare Worker.
-*   An R2 Bucket and/or a KV Namespace (you must bind at least one for storage).
 
 ## Installation & Deployment
 
