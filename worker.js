@@ -328,7 +328,8 @@ export default {
             return new Response("Not Found", { status: 404 });
             
         } catch (err) {
-            return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { 
+            console.error("Unhandled error in worker fetch", err);
+            return new Response(JSON.stringify({ error: "Internal Server Error" }), { 
                 status: 500, 
                 headers: { "Content-Type": "application/json" } 
             });
