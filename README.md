@@ -16,7 +16,7 @@ You can simply create a **Online PDF Workspace (Reader/Editor)** that is a power
 *   **Version Control:** Full history support allows you to track changes and revert to previous versions of your edited documents.
 *   **PWA/desktop/mobile Optimized:** Install it as a native-feeling app on your desktop or mobile device.
 
-## Setting Up Cloudflare (Step-by-Step for Amateurs)
+## Setting Up Cloudflare (Step-by-Step)
 
 To get this reader and editor running, you need three main components in your Cloudflare dashboard:
 
