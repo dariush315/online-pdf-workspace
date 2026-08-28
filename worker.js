@@ -274,7 +274,7 @@ export default {
                 const payload = await request.json();
                 if (!payload.hash) return new Response("Missing hash", { status: 400 });
 
-                await db.put(payload.hash, JSON.stringify({ drawing: payload.drawing, stats: payload.stats }));
+                await db.put(payload.hash, JSON.stringify({ drawing: payload.drawing, formState: payload.formState, stats: payload.stats }));
 
                 if (payload.stats) {
                     const meta = await db.getJson('meta:' + payload.hash);
@@ -299,14 +299,15 @@ export default {
                         return annot;
                     });
                     
-                    const currentStr = JSON.stringify(compressedDrawing);
-                    const isDuplicate = history.length > 0 && JSON.stringify(history[0].drawing) === currentStr;
+                    const currentStr = JSON.stringify({ d: compressedDrawing, f: payload.formState });
+                    const isDuplicate = history.length > 0 && JSON.stringify({ d: history[0].drawing, f: history[0].formState }) === currentStr;
                     
                     if (!isDuplicate) {
                         history.unshift({ 
                             id: Date.now().toString(), 
                             timestamp: new Date().toISOString(), 
-                            drawing: compressedDrawing 
+                            drawing: compressedDrawing,
+                            formState: payload.formState
                         });
                         if (history.length > 20) history.pop(); 
                         await db.put(historyKey, JSON.stringify(history));
@@ -413,6 +414,8 @@ const html = `<!DOCTYPE html>
             overflow: visible;
             position: relative;
         }
+
+        
         
         .toolbar-group { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; flex-shrink: 0; }
         .left-group { flex: 1 1 0%; justify-content: flex-start; min-width: 0; }
@@ -674,6 +677,36 @@ const html = `<!DOCTYPE html>
             #sidebar { position: absolute; z-index: 50; height: calc(100% - 40px); width: 100%; top: 0; }
             .props-modal-box { width: 90%; }
         }
+        /* --- ANNOTATION LAYER (FORM FIELDS) BLOCK --- */
+        .annotationLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 4;
+            pointer-events: auto;
+        }
+        .annotationLayer section {
+            position: absolute;
+        }
+        .annotationLayer input, 
+        .annotationLayer textarea, 
+        .annotationLayer select {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 2px;
+            box-sizing: border-box;
+            background-color: rgba(0, 100, 255, 0.1);
+            border: 1px solid rgba(0, 100, 255, 0.5);
+            font-family: inherit;
+        }
+        .annotationLayer input:focus, 
+        .annotationLayer textarea:focus {
+            background-color: rgba(0, 100, 255, 0.2);
+            outline: none;
+        }   
     </style>
 </head>
 <body class="tool-mode-textselect">
@@ -1436,7 +1469,13 @@ const html = `<!DOCTYPE html>
                 appState.undoStack.set(active.tabId, []);
             }
             const stack = appState.undoStack.get(active.tabId);
-            const state = { annots: JSON.stringify(active.annots), rotation: active.rotation };
+            active.formState = active.formState || {};
+
+            const state = { 
+                annots: JSON.stringify(active.annots), 
+                rotation: active.rotation,
+                formState: JSON.stringify(active.formState)
+            };
             
             if (structureChange) {
                 state.bytes = cloneBuffer(active.bytes);
@@ -1458,10 +1497,12 @@ const html = `<!DOCTYPE html>
                 appState.redoStack.set(active.tabId, []);
             }
             
+            active.formState = active.formState || {};
             const prevStatePeek = stack[stack.length - 1];
             const currentState = { 
                 annots: JSON.stringify(active.annots), 
-                rotation: active.rotation 
+                rotation: active.rotation,
+                formState: JSON.stringify(active.formState)
             };
             
             if (prevStatePeek.bytes || active.rotation !== prevStatePeek.rotation) {
@@ -1472,6 +1513,7 @@ const html = `<!DOCTYPE html>
 
             const prevState = stack.pop();
             active.annots = JSON.parse(prevState.annots);
+            active.formState = JSON.parse(prevState.formState || "{}");
             let structureChanged = false;
 
             if (prevState.bytes) {
@@ -1501,6 +1543,7 @@ const html = `<!DOCTYPE html>
             syncAnnotations(true);
             updateUndoRedoUI();
             updateStatusCounter();
+            restoreFormStateToDOM(active);
         }
 
         async function triggerRedo() {
@@ -1512,10 +1555,12 @@ const html = `<!DOCTYPE html>
                 appState.undoStack.set(active.tabId, []);
             }
             
+            active.formState = active.formState || {};
             const nextStatePeek = stack[stack.length - 1];
             const currentState = { 
                 annots: JSON.stringify(active.annots), 
-                rotation: active.rotation 
+                rotation: active.rotation,
+                formState: JSON.stringify(active.formState)
             };
             
             if (nextStatePeek.bytes || active.rotation !== nextStatePeek.rotation) {
@@ -1526,6 +1571,7 @@ const html = `<!DOCTYPE html>
 
             const nextState = stack.pop();
             active.annots = JSON.parse(nextState.annots);
+            active.formState = JSON.parse(nextState.formState || "{}");
             let structureChanged = false;
 
             if (nextState.bytes) {
@@ -1551,10 +1597,30 @@ const html = `<!DOCTYPE html>
                 renderThumbnails();
             }
             
-            renderAnnotations();
+            renderAnnotations(); 
             syncAnnotations(true);
             updateUndoRedoUI();
             updateStatusCounter();
+            restoreFormStateToDOM(active);
+        }
+
+        function restoreFormStateToDOM(active) {
+            if (!active || !active.pdfDoc) return;
+            document.querySelectorAll('.form-layer input, .form-layer textarea, .form-layer select').forEach(inp => {
+                const id = inp.dataset.annotId;
+                if (id) {
+                    // Fallback to empty string if undefined in restored state (forces clearing)
+                    const val = active.formState[id] !== undefined ? active.formState[id] : '';
+                    if (inp.type === 'checkbox' || inp.type === 'radio') {
+                        inp.checked = (val === 'On');
+                    } else if (inp.type !== 'button') {
+                        inp.value = val;
+                    }
+                    if (active.pdfDoc.annotationStorage) {
+                        active.pdfDoc.annotationStorage.setValue(id, { value: val });
+                    }
+                }
+            });
         }
 
         function updateUndoRedoUI() {
@@ -1568,19 +1634,15 @@ const html = `<!DOCTYPE html>
             const rStack = appState.redoStack.get(active.tabId);
             
             if (uStack && uStack.length > 0) { 
-                btnUndo.style.opacity = '1'; 
-                btnUndo.style.pointerEvents = 'auto'; 
+                btnUndo.style.opacity = '1'; btnUndo.style.pointerEvents = 'auto'; 
             } else { 
-                btnUndo.style.opacity = '0.3'; 
-                btnUndo.style.pointerEvents = 'none'; 
+                btnUndo.style.opacity = '0.3'; btnUndo.style.pointerEvents = 'none'; 
             }
             
             if (rStack && rStack.length > 0) { 
-                btnRedo.style.opacity = '1'; 
-                btnRedo.style.pointerEvents = 'auto'; 
+                btnRedo.style.opacity = '1'; btnRedo.style.pointerEvents = 'auto'; 
             } else { 
-                btnRedo.style.opacity = '0.3'; 
-                btnRedo.style.pointerEvents = 'none'; 
+                btnRedo.style.opacity = '0.3'; btnRedo.style.pointerEvents = 'none'; 
             }
         }
 
@@ -1670,7 +1732,7 @@ const html = `<!DOCTYPE html>
                         }
                     });
                     renderAnnotations();
-                    syncAnnotations(false);
+                    syncAnnotations(true);
                 }
             });
         });
@@ -1687,7 +1749,7 @@ const html = `<!DOCTYPE html>
                 }
             });
             renderAnnotations();
-            syncAnnotations(false);
+            syncAnnotations(true);
         });
 
         document.getElementById('comment-hl-btn').addEventListener('click', function(e) {
@@ -2297,9 +2359,13 @@ const html = `<!DOCTYPE html>
                 pageDiv.style.height = viewport.height + 'px';
                 pageDiv.innerHTML = ''; 
 
+                // 1. High-DPI Canvas Rendering (Fixes Blur)
                 const canvas = document.createElement('canvas');
-                canvas.width = viewport.width; 
-                canvas.height = viewport.height; 
+                const outputScale = Math.max(window.devicePixelRatio || 1, 2.5); 
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                canvas.style.width = Math.floor(viewport.width) + 'px';
+                canvas.style.height = Math.floor(viewport.height) + 'px';
                 pageDiv.appendChild(canvas);
 
                 const textLayerDiv = document.createElement('div'); 
@@ -2313,9 +2379,165 @@ const html = `<!DOCTYPE html>
                 drawingLayer.setAttribute('preserveAspectRatio', 'none');
                 pageDiv.appendChild(drawingLayer);
 
-                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport, annotationMode: 0 }).promise;
+                const renderContext = {
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport,
+                    annotationMode: 0,
+                    transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null
+                };
+                await page.render(renderContext).promise;
+
                 const textContent = await page.getTextContent();
                 await pdfjsLib.renderTextLayer({ textContentSource: textContent, container: textLayerDiv, viewport: viewport, textDivs: [] }).promise;
+
+                // --- CUSTOM ACROFORM RENDERER ---
+                const formLayerDiv = document.createElement('div');
+                formLayerDiv.className = 'form-layer';
+                formLayerDiv.style.position = 'absolute';
+                formLayerDiv.style.top = '0';
+                formLayerDiv.style.left = '0';
+                formLayerDiv.style.width = '100%';
+                formLayerDiv.style.height = '100%';
+                formLayerDiv.style.zIndex = '10'; 
+                formLayerDiv.style.pointerEvents = 'none'; 
+                pageDiv.appendChild(formLayerDiv);
+
+                try {
+                    const annots = await page.getAnnotations({ intent: 'display' });
+                    const widgets = annots.filter(a => a.subtype === 'Widget' || a.fieldType);
+                    
+                    widgets.forEach(widget => {
+                        if (!widget.rect) return;
+                        
+                        const rect = viewport.convertToViewportRectangle(widget.rect);
+                        const x = Math.min(rect[0], rect[2]);
+                        const y = Math.min(rect[1], rect[3]);
+                        const w = Math.abs(rect[2] - rect[0]);
+                        const h = Math.abs(rect[3] - rect[1]);
+
+                        if (w < 2 || h < 2) return;
+
+                        let inputEl = null;
+                        active.formState = active.formState || {};
+                        
+                        if (active.formState[widget.id] === undefined) {
+                            active.formState[widget.id] = widget.fieldValue || '';
+                        }
+                        
+                        const currentVal = active.formState[widget.id];
+                        
+                        if (widget.pushButton || (widget.fieldType === 'Btn' && !widget.checkBox && !widget.radioButton)) {
+                            inputEl = document.createElement('input');
+                            inputEl.type = 'button';
+                            inputEl.value = widget.buttonValue || widget.fieldValue || widget.alternativeText || widget.fieldName || widget.name || 'Button';
+                            
+                            inputEl.addEventListener('click', (e) => {
+                                e.preventDefault(); e.stopPropagation();
+                                const btnText = inputEl.value.toLowerCase();
+                                if (btnText.includes('skriv ut') || btnText.includes('print')) {
+                                    document.getElementById('btn-print').click();
+                                    inputEl.blur(); // Release focus
+                                } else if (btnText.includes('töm') || btnText.includes('clear') || btnText.includes('reset')) {
+                                    if (confirm('Are you sure you want to clear the form?')) {
+                                        saveStateForUndo(active);
+                                        document.querySelectorAll('.form-layer input:not([type="button"]), .form-layer textarea, .form-layer select').forEach(inp => {
+                                            if (inp.type === 'checkbox' || inp.type === 'radio') inp.checked = false;
+                                            else inp.value = '';
+                                            if (inp.dataset.annotId) active.formState[inp.dataset.annotId] = '';
+                                            inp.dispatchEvent(new Event('input')); 
+                                        });
+                                        syncAnnotations(true);
+                                        inputEl.blur(); // Fix: Force focus back to document so Ctrl+Z works
+                                    }
+                                }
+                            });
+                        } 
+                        else if (widget.checkBox || widget.radioButton || widget.fieldType === 'Btn') {
+                            inputEl = document.createElement('input');
+                            inputEl.type = widget.checkBox ? 'checkbox' : 'radio';
+                            inputEl.checked = currentVal && currentVal !== 'Off';
+                        } 
+                        else if (widget.combo || widget.options || widget.fieldType === 'Ch') {
+                            inputEl = document.createElement('select');
+                            (widget.options || []).forEach(opt => {
+                                const option = document.createElement('option');
+                                const val = typeof opt === 'string' ? opt : (opt.exportValue || opt.displayValue);
+                                option.value = val;
+                                option.textContent = typeof opt === 'string' ? opt : (opt.displayValue || val);
+                                if (currentVal === val || (Array.isArray(currentVal) && currentVal.includes(val))) option.selected = true;
+                                inputEl.appendChild(option);
+                            });
+                        } 
+                        else {
+                            inputEl = document.createElement(widget.multiLine ? 'textarea' : 'input');
+                            if (!widget.multiLine) inputEl.type = 'text';
+                            inputEl.value = currentVal || '';
+                            if (widget.multiLine) inputEl.style.resize = 'none';
+                        }
+
+                        inputEl.dataset.annotId = widget.id;
+                        inputEl.style.position = 'absolute';
+                        inputEl.style.left = x + 'px';
+                        inputEl.style.top = y + 'px';
+                        inputEl.style.width = w + 'px';
+                        inputEl.style.height = h + 'px';
+                        inputEl.style.margin = '0';
+                        inputEl.style.padding = '4px';
+                        inputEl.style.boxSizing = 'border-box';
+                        inputEl.style.fontSize = (10 * viewport.scale) + 'px';
+                        inputEl.style.fontFamily = 'Helvetica, Arial, sans-serif';
+                        inputEl.style.pointerEvents = 'auto'; 
+                        inputEl.style.outline = 'none';
+
+                        if (inputEl.type === 'button') {
+                            inputEl.style.backgroundColor = '#d1d5db'; 
+                            inputEl.style.color = '#000';
+                            inputEl.style.border = '1px solid #9ca3af';
+                            inputEl.style.cursor = 'pointer';
+                            inputEl.style.borderRadius = '3px';
+                        } else {
+                            inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.15)'; 
+                            inputEl.style.border = '1px solid rgba(0, 100, 255, 0.6)';
+                            inputEl.style.color = '#000';
+                            
+                            inputEl.addEventListener('focus', () => { 
+                                inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.25)';
+                                inputEl.dataset.prevVal = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? inputEl.checked : inputEl.value;
+                            });
+                            inputEl.addEventListener('blur', () => { 
+                                inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.15)'; 
+                                const newVal = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? inputEl.checked : inputEl.value;
+                                if (String(newVal) !== String(inputEl.dataset.prevVal)) {
+                                    saveStateForUndo(active);
+                                    active.formState[widget.id] = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? (inputEl.checked ? 'On' : 'Off') : inputEl.value;
+                                    syncAnnotations(false);
+                                }
+                            });
+                        }
+
+                        inputEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+                        inputEl.addEventListener('mousedown', (e) => e.stopPropagation());
+                        
+                        // Fix: Ignore propagation stops specifically for Undo/Redo key bindings
+                        inputEl.addEventListener('keydown', (e) => {
+                            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+                                return; 
+                            }
+                            e.stopPropagation();
+                        });
+
+                        inputEl.addEventListener('input', (e) => {
+                            const val = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? (inputEl.checked ? 'On' : 'Off') : inputEl.value;
+                            active.formState[widget.id] = val;
+                            if (active.pdfDoc.annotationStorage) active.pdfDoc.annotationStorage.setValue(widget.id, { value: val });
+                        });
+
+                        formLayerDiv.appendChild(inputEl);
+                    });
+                } catch (e) {
+                    console.warn('Form rendering failed:', e);
+                }
+                // --- END CUSTOM ACROFORM RENDERER ---
 
                 // [KEEP YOUR EXISTING NATIVE ANNOTATION EXTRACTOR LOOP HERE]
                 if (!active.nativeAnnotsImported) {
@@ -2361,7 +2583,7 @@ const html = `<!DOCTYPE html>
                     });
                     if (pageNum === active.pdfDoc.numPages) {
                         active.nativeAnnotsImported = true;
-                        if (importedAny) syncAnnotations(false); 
+                        if (importedAny) syncAnnotations(true); 
                     }
                 }
                 // [END EXISTING NATIVE EXTRACTION]
@@ -2405,10 +2627,15 @@ const html = `<!DOCTYPE html>
         }
 
         // --- FILE INGESTION & CLOUD AUTO-ADD BLOCK ---
-        async function calculateHash(arrayBuffer) {
+        async function calculateHash(arrayBuffer, fileName = "") {
             try {
                 if (crypto && crypto.subtle) {
-                    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer.slice(0));
+                    const nameBytes = new TextEncoder().encode(fileName);
+                    const combined = new Uint8Array(nameBytes.byteLength + arrayBuffer.byteLength);
+                    combined.set(nameBytes, 0);
+                    combined.set(new Uint8Array(arrayBuffer), nameBytes.byteLength);
+
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', combined);
                     return Array.from(new Uint8Array(hashBuffer)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
                 }
             } catch(e) {}
@@ -2421,7 +2648,7 @@ const html = `<!DOCTYPE html>
                     const [handle] = await window.showOpenFilePicker({ types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] });
                     const file = await handle.getFile();
                     const bytes = await file.arrayBuffer();
-                    const hash = await calculateHash(bytes);
+                    const hash = await calculateHash(bytes, file.name);
                     await ingestFileBytes(bytes, file.name, handle, hash, true);
                 } catch (err) { 
                     if (err.name !== 'AbortError') document.getElementById('fallback-file-input').click(); 
@@ -2436,7 +2663,7 @@ const html = `<!DOCTYPE html>
                 const file = e.target.files[0];
                 if (!file) return;
                 const bytes = await file.arrayBuffer();
-                const hash = await calculateHash(bytes);
+                const hash = await calculateHash(bytes, file.name);
                 await ingestFileBytes(bytes, file.name, null, hash, true);
                 e.target.value = '';
             } catch(err) { 
@@ -2478,7 +2705,7 @@ const html = `<!DOCTYPE html>
                 const pdfLib = window.PDFLib;
 
                 // 1. Load a temporary PDF.js instance to extract metadata & native annotations
-                const tempPdfJs = await pdfjsLib.getDocument({ data: new Uint8Array(cloneBuffer(pristineBytes)) }).promise;
+                const tempPdfJs = await pdfjsLib.getDocument({ data: new Uint8Array(cloneBuffer(pristineBytes)), enableXfa: true }).promise;
                 
                 let creator = 'Unknown';
                 try {
@@ -2500,6 +2727,8 @@ const html = `<!DOCTYPE html>
                         const data = await apiFetch('/api/load?hash=' + encodeURIComponent(hash));
                         if (data && data.drawing !== undefined) {
                             workspaceAnnots = data.drawing;
+                            restoredData = restoredData || {};
+                            restoredData.formState = data.formState || {};
                             hasCloudState = true;
                         }
                     } catch(e) {
@@ -2558,44 +2787,14 @@ const html = `<!DOCTYPE html>
                     }
                 }
 
-                // 2. Strip visual annotations from bytes so PDF.js doesn't paint ghost highlights
-                document.getElementById('ribbon-file-info').innerText = "Optimizing viewing...";
-                const pdfLibDoc = await pdfLib.PDFDocument.load(cloneBuffer(pristineBytes));
-                const pages = pdfLibDoc.getPages();
-                
-                pages.forEach(page => {
-                    let annotsList = page.node.lookup(pdfLib.PDFName.of('Annots'));
-                    if (annotsList instanceof pdfLib.PDFArray) {
-                        const keptAnnots = [];
-                        for (let i = 0; i < annotsList.size(); i++) {
-                            try {
-                                const annotRef = annotsList.get(i); 
-                                const annot = pdfLibDoc.context.lookup(annotRef);
-                                if (annot instanceof pdfLib.PDFDict) {
-                                    const subtypeName = annot.lookup(pdfLib.PDFName.of('Subtype')); 
-                                    const subtypeStr = subtypeName ? (subtypeName.name || String(subtypeName).replace('/', '')) : '';
-                                    if (!['Highlight', 'Text', 'Ink', 'Square', 'Circle', 'Line', 'Polygon', 'PolyLine', 'FreeText'].includes(subtypeStr)) {
-                                        keptAnnots.push(annotRef); // Keep links, form elements etc.
-                                    }
-                                } else {
-                                    keptAnnots.push(annotRef);
-                                }
-                            } catch(e) {}
-                        }
-                        page.node.set(pdfLib.PDFName.of('Annots'), pdfLibDoc.context.obj(keptAnnots)); 
-                    }
-                });
-                
-                const workingBytes = await pdfLibDoc.save();
-
-                // 3. Load stripped bytes into actual workspace viewer
-                const finalPdfJs = await pdfjsLib.getDocument({ data: new Uint8Array(cloneBuffer(workingBytes)) }).promise;
+                // 2. Load uncorrupted bytes into actual workspace viewer (Preserves AcroForm integrity)
+                const finalPdfJs = await pdfjsLib.getDocument({ data: new Uint8Array(cloneBuffer(pristineBytes)), enableXfa: true }).promise;
 
                 appState.tabs.set(tabId, {
                     tabId: tabId, 
                     hash: hash, 
                     name: name, 
-                    bytes: workingBytes, 
+                    bytes: pristineBytes, 
                     originalBytes: pristineBytes, 
                     fileHandle: handle, 
                     pdfDoc: finalPdfJs,
@@ -2603,6 +2802,7 @@ const html = `<!DOCTYPE html>
                     scale: 1.5, 
                     rotation: restoredData ? (restoredData.rotation || 0) : 0, 
                     annots: workspaceAnnots, 
+                    formState: restoredData && restoredData.formState ? restoredData.formState : {},
                     unsaved: false, 
                     nativeAnnotsImported: true, 
                     statsCalculated: false, 
@@ -2630,6 +2830,7 @@ const html = `<!DOCTYPE html>
                             });
                             stack.push({
                                 annots: JSON.stringify(reconstructedDrawing),
+                                formState: JSON.stringify(history[i].formState || {}),
                                 rotation: restoredData ? (restoredData.rotation || 0) : 0
                             });
                         }
@@ -2641,7 +2842,7 @@ const html = `<!DOCTYPE html>
                 const alreadyInLib = appState.libraryFiles.some(f => f.hash === hash);
                 if (!alreadyInLib) {
                     appState.libraryFiles.push({
-                        name: name, hash: hash, isFolder: false, size: workingBytes.byteLength, created: Date.now(), parent: appState.currentLibPath, stats: null
+                        name: name, hash: hash, isFolder: false, size: pristineBytes.byteLength, created: Date.now(), parent: appState.currentLibPath, stats: null
                     });
                     apiFetch('/api/library/upload?hash=' + encodeURIComponent(hash) + '&name=' + encodeURIComponent(name) + '&parent=' + encodeURIComponent(appState.currentLibPath), {
                         method: 'POST',
@@ -2829,7 +3030,7 @@ const html = `<!DOCTYPE html>
                 
                 active.statsCalculated = true;
                 if (getActive() === active) updateStatusCounter();
-                syncAnnotations(false);
+                syncAnnotations(true);
             } catch (err) { 
                 console.error("Stats calculating error", err); 
                 active.stats = { chars: 0, words: 0, sentences: 0, paragraphs: 0 };
@@ -3056,8 +3257,11 @@ const html = `<!DOCTYPE html>
                 pageDiv.style.height = viewport.height + 'px';
 
                 const canvas = document.createElement('canvas');
-                canvas.width = viewport.width; 
-                canvas.height = viewport.height; 
+                const outputScale = window.devicePixelRatio || 1;
+                canvas.width = viewport.width * outputScale;
+                canvas.height = viewport.height * outputScale;
+                canvas.style.width = viewport.width + 'px';
+                canvas.style.height = viewport.height + 'px';
                 pageDiv.appendChild(canvas);
 
                 const textLayerDiv = document.createElement('div'); 
@@ -3071,9 +3275,165 @@ const html = `<!DOCTYPE html>
                 drawingLayer.setAttribute('preserveAspectRatio', 'none');
                 pageDiv.appendChild(drawingLayer);
 
-                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport, annotationMode: 0 }).promise;
+                const renderContext = {
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport,
+                    annotationMode: 0,
+                    transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null
+                };
+                await page.render(renderContext).promise;
+
                 const textContent = await page.getTextContent();
                 await pdfjsLib.renderTextLayer({ textContentSource: textContent, container: textLayerDiv, viewport: viewport, textDivs: [] }).promise;
+
+                // --- CUSTOM ACROFORM RENDERER ---
+                const formLayerDiv = document.createElement('div');
+                formLayerDiv.className = 'form-layer';
+                formLayerDiv.style.position = 'absolute';
+                formLayerDiv.style.top = '0';
+                formLayerDiv.style.left = '0';
+                formLayerDiv.style.width = '100%';
+                formLayerDiv.style.height = '100%';
+                formLayerDiv.style.zIndex = '10'; 
+                formLayerDiv.style.pointerEvents = 'none'; 
+                pageDiv.appendChild(formLayerDiv);
+
+                try {
+                    const annots = await page.getAnnotations({ intent: 'display' });
+                    const widgets = annots.filter(a => a.subtype === 'Widget' || a.fieldType);
+                    
+                    widgets.forEach(widget => {
+                        if (!widget.rect) return;
+                        
+                        const rect = viewport.convertToViewportRectangle(widget.rect);
+                        const x = Math.min(rect[0], rect[2]);
+                        const y = Math.min(rect[1], rect[3]);
+                        const w = Math.abs(rect[2] - rect[0]);
+                        const h = Math.abs(rect[3] - rect[1]);
+
+                        if (w < 2 || h < 2) return;
+
+                        let inputEl = null;
+                        active.formState = active.formState || {};
+                        
+                        if (active.formState[widget.id] === undefined) {
+                            active.formState[widget.id] = widget.fieldValue || '';
+                        }
+                        
+                        const currentVal = active.formState[widget.id];
+                        
+                        if (widget.pushButton || (widget.fieldType === 'Btn' && !widget.checkBox && !widget.radioButton)) {
+                            inputEl = document.createElement('input');
+                            inputEl.type = 'button';
+                            inputEl.value = widget.buttonValue || widget.fieldValue || widget.alternativeText || widget.fieldName || widget.name || 'Button';
+                            
+                            inputEl.addEventListener('click', (e) => {
+                                e.preventDefault(); e.stopPropagation();
+                                const btnText = inputEl.value.toLowerCase();
+                                if (btnText.includes('skriv ut') || btnText.includes('print')) {
+                                    document.getElementById('btn-print').click();
+                                    inputEl.blur(); // Release focus
+                                } else if (btnText.includes('töm') || btnText.includes('clear') || btnText.includes('reset')) {
+                                    if (confirm('Are you sure you want to clear the form?')) {
+                                        saveStateForUndo(active);
+                                        document.querySelectorAll('.form-layer input:not([type="button"]), .form-layer textarea, .form-layer select').forEach(inp => {
+                                            if (inp.type === 'checkbox' || inp.type === 'radio') inp.checked = false;
+                                            else inp.value = '';
+                                            if (inp.dataset.annotId) active.formState[inp.dataset.annotId] = '';
+                                            inp.dispatchEvent(new Event('input')); 
+                                        });
+                                        syncAnnotations(true);
+                                        inputEl.blur(); // Fix: Force focus back to document so Ctrl+Z works
+                                    }
+                                }
+                            });
+                        } 
+                        else if (widget.checkBox || widget.radioButton || widget.fieldType === 'Btn') {
+                            inputEl = document.createElement('input');
+                            inputEl.type = widget.checkBox ? 'checkbox' : 'radio';
+                            inputEl.checked = currentVal && currentVal !== 'Off';
+                        } 
+                        else if (widget.combo || widget.options || widget.fieldType === 'Ch') {
+                            inputEl = document.createElement('select');
+                            (widget.options || []).forEach(opt => {
+                                const option = document.createElement('option');
+                                const val = typeof opt === 'string' ? opt : (opt.exportValue || opt.displayValue);
+                                option.value = val;
+                                option.textContent = typeof opt === 'string' ? opt : (opt.displayValue || val);
+                                if (currentVal === val || (Array.isArray(currentVal) && currentVal.includes(val))) option.selected = true;
+                                inputEl.appendChild(option);
+                            });
+                        } 
+                        else {
+                            inputEl = document.createElement(widget.multiLine ? 'textarea' : 'input');
+                            if (!widget.multiLine) inputEl.type = 'text';
+                            inputEl.value = currentVal || '';
+                            if (widget.multiLine) inputEl.style.resize = 'none';
+                        }
+
+                        inputEl.dataset.annotId = widget.id;
+                        inputEl.style.position = 'absolute';
+                        inputEl.style.left = x + 'px';
+                        inputEl.style.top = y + 'px';
+                        inputEl.style.width = w + 'px';
+                        inputEl.style.height = h + 'px';
+                        inputEl.style.margin = '0';
+                        inputEl.style.padding = '4px';
+                        inputEl.style.boxSizing = 'border-box';
+                        inputEl.style.fontSize = (10 * viewport.scale) + 'px';
+                        inputEl.style.fontFamily = 'Helvetica, Arial, sans-serif';
+                        inputEl.style.pointerEvents = 'auto'; 
+                        inputEl.style.outline = 'none';
+
+                        if (inputEl.type === 'button') {
+                            inputEl.style.backgroundColor = '#d1d5db'; 
+                            inputEl.style.color = '#000';
+                            inputEl.style.border = '1px solid #9ca3af';
+                            inputEl.style.cursor = 'pointer';
+                            inputEl.style.borderRadius = '3px';
+                        } else {
+                            inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.15)'; 
+                            inputEl.style.border = '1px solid rgba(0, 100, 255, 0.6)';
+                            inputEl.style.color = '#000';
+                            
+                            inputEl.addEventListener('focus', () => { 
+                                inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.25)';
+                                inputEl.dataset.prevVal = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? inputEl.checked : inputEl.value;
+                            });
+                            inputEl.addEventListener('blur', () => { 
+                                inputEl.style.backgroundColor = 'rgba(0, 100, 255, 0.15)'; 
+                                const newVal = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? inputEl.checked : inputEl.value;
+                                if (String(newVal) !== String(inputEl.dataset.prevVal)) {
+                                    saveStateForUndo(active);
+                                    active.formState[widget.id] = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? (inputEl.checked ? 'On' : 'Off') : inputEl.value;
+                                    syncAnnotations(false);
+                                }
+                            });
+                        }
+
+                        inputEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+                        inputEl.addEventListener('mousedown', (e) => e.stopPropagation());
+                        
+                        // Fix: Ignore propagation stops specifically for Undo/Redo key bindings
+                        inputEl.addEventListener('keydown', (e) => {
+                            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+                                return; 
+                            }
+                            e.stopPropagation();
+                        });
+
+                        inputEl.addEventListener('input', (e) => {
+                            const val = (inputEl.type === 'checkbox' || inputEl.type === 'radio') ? (inputEl.checked ? 'On' : 'Off') : inputEl.value;
+                            active.formState[widget.id] = val;
+                            if (active.pdfDoc.annotationStorage) active.pdfDoc.annotationStorage.setValue(widget.id, { value: val });
+                        });
+
+                        formLayerDiv.appendChild(inputEl);
+                    });
+                } catch (e) {
+                    console.warn('Form rendering failed:', e);
+                }
+                // --- END CUSTOM ACROFORM RENDERER ---
 
                 if (!active.nativeAnnotsImported) {
                     const nativeAnnotations = await page.getAnnotations();
@@ -3128,7 +3488,7 @@ const html = `<!DOCTYPE html>
                         active.nativeAnnotsImported = true;
                         if (importedAny) { 
                             renderAnnotations(); 
-                            syncAnnotations(false); 
+                            syncAnnotations(true); 
                         }
                     }
                 }
@@ -4118,9 +4478,12 @@ const html = `<!DOCTYPE html>
                     const meta = document.createElement('div'); 
                     meta.style.fontSize = '11px'; 
                     meta.style.opacity = '0.7'; 
-                    meta.innerText = version.drawing.length + ' active annotations' + (idx === 0 ? ' (Current State)' : '');
                     
-                    const revertBtn = document.createElement('button'); 
+                    // Count how many fields actually contain text/checks
+                    const formFieldsCount = Object.keys(version.formState || {}).filter(k => version.formState[k] && version.formState[k] !== 'Off').length;
+                    meta.innerText = version.drawing.length + ' annots, ' + formFieldsCount + ' fields filled' + (idx === 0 ? ' (Current State)' : '');
+                    
+                    const revertBtn = document.createElement('button');
                     revertBtn.className = 'history-action-btn'; 
                     revertBtn.innerText = 'Revert';
                     
@@ -4154,7 +4517,7 @@ const html = `<!DOCTYPE html>
                             active.annots = newAnnots; 
                             renderAnnotations(); 
                             
-                            await syncAnnotations(false); 
+                            await syncAnnotations(true); 
                             document.getElementById('ribbon-file-info').innerText = "Reverted to previous version!"; 
                             setTimeout(updateStatusCounter, 3000);
                         }
@@ -4194,7 +4557,8 @@ const html = `<!DOCTYPE html>
                 }
                 return a;
             });
-            const currentStr = JSON.stringify(historyCompareData);
+            // FIX: Include formState in the comparison hash to trigger version history
+            const currentStr = JSON.stringify({ d: historyCompareData, f: active.formState });
             if (createVersionSnapshot && appState.lastSavedHistoryHash === currentStr) {
                 createVersionSnapshot = false; 
             }
@@ -4234,7 +4598,8 @@ const html = `<!DOCTYPE html>
                         hash: active.hash, 
                         drawing: active.annots, 
                         createVersion: createVersionSnapshot,
-                        stats: statsObj
+                        stats: statsObj,
+                        formState: active.formState
                     }) 
                 });
                 
@@ -4875,7 +5240,7 @@ const html = `<!DOCTYPE html>
                 
                 let targetName = file.name;
                 const buffer = await file.arrayBuffer();
-                let hash = await calculateHash(buffer);
+                let hash = await calculateHash(buffer, targetName);
 
                 let numPages = '--';
                 let creator = 'Unknown';
@@ -4905,7 +5270,7 @@ const html = `<!DOCTYPE html>
                     } else if (resolution === 'copy') {
                         const nameWithoutExt = targetName.toLowerCase().endsWith('.pdf') ? targetName.slice(0, -4) : targetName;
                         targetName = nameWithoutExt + '_' + Date.now() + '.pdf';
-                        hash = await calculateHash(new TextEncoder().encode(targetName + Date.now()));
+                        hash = await calculateHash(new TextEncoder().encode(targetName + Date.now()), targetName);
                     }
                 }
                 
@@ -5106,4 +5471,3 @@ const loginHtml = `<!DOCTYPE html>
     </form>
 </body>
 </html>`;
-
